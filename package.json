@@ -1,0 +1,14 @@
+{
+  "name": "yan-learning",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "儿童教育互动网页应用集",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "dev": "python3 -m http.server 4173 --bind 127.0.0.1"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

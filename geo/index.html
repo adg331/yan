@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f7f0">
+  <meta name="description" content="在中国地图上找到34个省级行政区，连接省名、简称和省会。为 iPad 触屏设计的儿童地理游戏。">
+  <title>geo · 中国地理探险</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="../" aria-label="返回 yan 首页"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="13" fill="#24785f"/><circle cx="20" cy="20" r="12" fill="none" stroke="#d7efb1" stroke-width="1.5"/><ellipse cx="20" cy="20" rx="5.8" ry="12" fill="none" stroke="#d7efb1" stroke-width="1.5"/><path d="M8 20h24M10 14h20M10 26h20" fill="none" stroke="#d7efb1" stroke-width="1.2"/></svg><span>geo<span class="brand-dot">.</span></span><small>小小地理探险家</small></a>
+    <nav class="tabs" role="tablist" aria-label="选择游戏">
+      <button id="tab-map" class="tab active" role="tab" aria-selected="true" aria-controls="map-panel" data-mode="map"><span aria-hidden="true">◈</span> 省份拖拽</button>
+      <button id="tab-match" class="tab" role="tab" aria-selected="false" aria-controls="match-panel" data-mode="match" tabindex="-1"><span aria-hidden="true">⌁</span> 省名连连看</button>
+    </nav>
+    <div class="header-actions"><button id="sound" class="icon-button" aria-label="关闭音效" aria-pressed="false" title="关闭音效"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 3c3 2 3 6 0 8m3-11c5 4 5 10 0 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg></button><button id="restart" class="reset-button"><span aria-hidden="true">↻</span> 重新开始</button></div>
+  </header>
+  <main>
+    <section class="mission" aria-label="游戏任务">
+      <div><div class="eyebrow"><span></span> CHINA EXPLORER <i>·</i> 中国地理探险</div><h1 id="mission-title">把名字，送回它的家<span class="heading-star">✦</span></h1><p id="mission-description">拖动右侧的省名，放到地图上对应的位置。</p></div>
+      <div class="progress-box"><div class="progress-label"><span id="progress-caption">探索进度</span><strong><b id="progress-count">0</b><span> / 34</span></strong></div><div class="progress-track" role="progressbar" aria-label="完成进度" aria-valuemin="0" aria-valuemax="34" aria-valuenow="0"><div id="progress-fill"></div></div><small id="progress-message">每一步，都是新的发现</small></div>
+    </section>
+    <section id="map-panel" role="tabpanel" aria-labelledby="tab-map" class="game-panel map-layout">
+      <div class="map-card">
+        <div class="map-topline"><span class="map-tag"><span></span> 中国 · 34 个省级行政区</span><div class="map-controls"><button id="zoom-out" aria-label="缩小地图">−</button><button id="zoom-reset" aria-label="恢复地图大小">复位</button><button id="zoom-in" aria-label="放大地图">＋</button></div></div>
+        <div id="map-canvas" class="map-canvas"><svg id="china-map" viewBox="0 0 900 620" aria-label="中国省级行政区空白地图"><defs><pattern id="sea-dots" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#c9ddd5" opacity=".55"/></pattern></defs><rect width="900" height="620" fill="url(#sea-dots)"/><g id="map-geography"></g><g id="map-labels"></g><g class="compass" transform="translate(60 470)" aria-hidden="true"><text y="-14" text-anchor="middle">北</text><path d="M0 0-7 25 0 20 7 25Z" fill="#769789"/><path d="M0 0V20" stroke="#f6faf4"/></g><svg id="south-sea" x="762" y="405" width="115" height="190" viewBox="0 0 115 190" aria-label="南海诸岛附图"><rect x="1" y="1" width="113" height="188" rx="5" fill="#f0f7ef" stroke="#a9c6b4"/><svg id="south-sea-detail" x="5" y="7" width="105" height="156"></svg><text x="57" y="178" text-anchor="middle" class="sea-label">南海诸岛</text></svg></svg><div id="abbr-flash" class="abbr-layer" hidden aria-hidden="true"></div><div id="map-loading" class="map-loading" hidden>正在展开地图…</div></div>
+        <div class="inset-bar"><div class="inset-help"><span class="loupe">⌕</span><strong>小区域放大</strong><small>也可以拖到这里</small></div><div id="insets" class="insets"></div></div>
+        <div class="map-bottom"><span><i class="legend-empty"></i> 等待探索 <i class="legend-done"></i> 已找到</span><span>也可先点省名，再点地图</span></div>
+      </div>
+      <aside class="candidates-card" aria-label="待放置的省名"><div class="candidates-title"><h2>省名候选</h2><span id="remaining">34 个待探索</span></div><p class="sort-note">A — Z <span>按汉语拼音排序</span></p><div id="candidates" class="candidates"></div><div id="candidates-complete" class="candidates-complete" hidden><span>✦</span><strong>每个名字都到家啦！</strong><p>你已经点亮了整张地图</p></div><div class="candidate-note"><span>✧</span> 慢慢来，每次尝试都算数</div></aside>
+    </section>
+    <section id="match-panel" role="tabpanel" aria-labelledby="tab-match" class="game-panel match-panel" hidden><div class="match-topline"><span><span class="tiny-star">✦</span> 34 组全部在这里，试着把三个好朋友连起来</span><span class="match-tip">拖线连接 · 也可依次点击</span></div><div id="match-board" class="match-board"><svg id="connection-lines" aria-hidden="true"></svg><div class="match-column" data-column="name"><h2><span>01</span> 省名 <small>从这里出发</small></h2><div id="match-names" class="match-grid"></div></div><div class="match-column" data-column="abbr"><h2><span>02</span> 简称 <small>找到小名</small></h2><div id="match-abbrs" class="match-grid"></div></div><div class="match-column" data-column="capital"><h2><span>03</span> 省会 / 首府 <small>认识中心城市</small></h2><div id="match-capitals" class="match-grid"></div></div></div><div class="match-bottom"><span id="match-status" role="status">从任意卡片出发，连接相邻两列中对应的卡片。</span><button id="clear-selection">取消选择</button></div></section>
+    <footer class="footer"><span>YAN / 好奇心，让世界更近一点</span><span id="footer-note">建议横屏游玩 <i>·</i> 触控与鼠标均可使用</span><button id="about-button">玩法与资料</button></footer>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <dialog id="win-dialog" class="win-dialog"><button class="dialog-close" aria-label="关闭">×</button><div class="win-medal">✦</div><p class="eyebrow">MISSION COMPLETE</p><h2>中国地理小达人！</h2><p id="win-message">34 个名字，都找到了自己的家。</p><div class="win-stats"><strong>34 / 34</strong><span>一整片中国，都被你点亮了</span></div><button id="play-again" class="primary-button">再挑战一次 ↻</button><button id="other-mode" class="secondary-button">试试省名连连看 →</button></dialog>
+  <dialog id="restart-dialog" class="info-dialog"><h2>重新开始这一关？</h2><p>当前玩法的进度会清空，另一个玩法不受影响。</p><div class="dialog-actions"><button id="cancel-restart" class="secondary-button">继续探索</button><button id="confirm-restart" class="primary-button">重新开始</button></div></dialog>
+  <dialog id="about-dialog" class="info-dialog"><button class="dialog-close" aria-label="关闭">×</button><p class="eyebrow">LITTLE GUIDE</p><h2>你好，小小探索家</h2><h3>省份拖拽</h3><p>拖动省名卡片到正确省份，或先点卡片、再点地图。答对后，简称会闪现 3 次。小面积区域可以放到下方的放大图里。使用 ＋ / − 放大缩小，放大后可以拖动空白海面移动地图。</p><h3>省名连连看</h3><p>34 组全部同时展示。连接省名与简称，再连接简称与省会；也可从右往左连接。整组的两条线都正确才算完成。可以拖线，也可以依次点击两张卡片。</p><h3>一点地理知识</h3><p>自治区的行政中心称首府。直辖市不设省会，第三列使用市名并标注“直辖市”；港澳的卡片标注“不设省会”。部分地区有多个常用简称，合并展示在同一张卡片上。</p><h3>资料来源</h3><p>省界图形：<a href="https://datav.aliyun.com/portal/school/atlas/area_selector" target="_blank" rel="noopener">阿里云 DataV 地理工具</a>，已保留台湾、南海诸岛与来源中的海上断续线。知识资料：<a href="https://r1-ndr.ykt.cbern.com.cn/edu_product/esp/assets/1a27180c-f282-4d45-b3ce-138c72905df4.pkg/pdf.pdf" target="_blank" rel="noopener">国家中小学智慧教育平台地理教材</a>。本图为互动学习示意，不用于测绘。</p><p class="privacy-note">进度仅保存在当前浏览器；不需要账号，不上传儿童信息。</p><button class="primary-button dialog-close-button">开始探索</button></dialog>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
