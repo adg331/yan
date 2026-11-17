@@ -301,6 +301,7 @@ function updateProgress() {
 function setMode(mode) {
   cancelGesture(); pan = null; selectedProvince = null; selectedTile = null; clearTimeout(winTimer); activeMode = mode;
   if (mode !== 'collection') state.mode = mode;
+  document.body.classList.toggle('is-matching', isMatch(mode));
   $$('.tab').forEach(e => { const active = e.dataset.mode === mode; e.classList.toggle('active', active); e.setAttribute('aria-selected', String(active)); e.tabIndex = active ? 0 : -1; });
   $('#map-panel').hidden = mode !== 'map'; $('#match-panel').hidden = !isMatch(mode); $('#collection-panel').hidden = mode !== 'collection';
   $('#mission-title').innerHTML = `${mode === 'map' ? '把名字，送回它的家' : isMatch(mode) ? mode === 'capital' ? '第 2 关 · 省名配省会' : '第 3 关 · 省名配简称' : '把每一次进步，变成收藏'}<span class="heading-star">✦</span>`;

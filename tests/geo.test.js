@@ -98,6 +98,44 @@ test('blank map reveals no province names; wrong drop retries, correct touch dra
   } finally { app.close(); }
 });
 
+test('map layout, cards and abbreviation effects survive pairing styles and level switches', async () => {
+  const app = launch();
+  try {
+    for (const file of ['styles.css', 'collection.css', 'match.css']) {
+      const style = app.w.document.createElement('style');
+      style.textContent = await readFile(new URL(`../geo/${file}`, import.meta.url), 'utf8');
+      app.w.document.head.append(style);
+    }
+    const computed = selector => app.w.getComputedStyle(app.q(selector));
+    assert.equal(computed('.map-card').display, 'flex');
+    assert.equal(computed('.map-card').flexDirection, 'column');
+    assert.equal(computed('.map-card').overflow, 'hidden');
+    assert.equal(computed('.map-card').borderRadius, '20px');
+    assert.equal(computed('.candidates-card').display, 'flex');
+    assert.equal(computed('#candidates').display, 'grid');
+    assert.equal(computed('.province-token').display, 'flex');
+    assert.equal(computed('.insets').display, 'grid');
+    const snapshot = () => ['.map-card', '.candidates-card', '#china-map', '#candidates', '.province-token', '.inset-bar', '.insets', '.topbar'].map(selector => {
+      const style = computed(selector);
+      return ['display', 'position', 'flex-direction', 'grid-template-columns', 'grid-template-rows', 'min-height', 'padding', 'background-color', 'border-radius'].map(key => style.getPropertyValue(key));
+    });
+    const before = snapshot();
+    app.dragMap('340000', '340000');
+    assert.equal(app.q('#abbr-flash strong').textContent, '皖');
+    assert.match(computed('.abbr-flash').animation, /abbr-flash/);
+    app.click('#zoom-in'); assert.notEqual(app.q('#china-map').getAttribute('viewBox'), '0 0 900 620');
+    app.click('#zoom-reset'); assert.equal(app.q('#china-map').getAttribute('viewBox'), '0 0 900 620');
+    for (const mode of ['capital', 'abbr']) {
+      app.click(`#tab-${mode}`); assert.ok(app.w.document.body.classList.contains('is-matching'));
+      assert.equal(app.q('#match-names').children.length, 6);
+      assert.equal(computed('#match-names').gridTemplateRows, 'repeat(6,minmax(44px,1fr))');
+      app.click(app.tile('name', '340000')); app.click(app.tile(mode, '340000')); assert.equal(app.progress(), 1);
+      app.click('#tab-map'); assert.ok(!app.w.document.body.classList.contains('is-matching'));
+      assert.deepEqual(snapshot(), before); assert.equal(app.progress(), 1);
+    }
+  } finally { app.close(); }
+});
+
 test('map tap fallback, small-area inset and pointer cancellation work', () => {
   const app = launch();
   try {
