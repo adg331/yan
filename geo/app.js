@@ -1,5 +1,6 @@
 import { PROVINCES } from './data/provinces.js';
 import { MAP, SOUTH_SEA_VIEW } from './data/map.js';
+import { createCollectionUI } from './collection-ui.js';
 
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -7,6 +8,7 @@ const byId = new Map(PROVINCES.map(p => [p.id, p]));
 const shapeById = new Map(MAP.map(p => [p.id, p]));
 const NS = 'http://www.w3.org/2000/svg';
 const STORE = 'yan.geo.progress.v1';
+const createRoundId = () => globalThis.crypto?.randomUUID?.() || `round-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 const palette = ['#d5e4c7', '#e1e7cc', '#ccdfd0', '#e5e8cf', '#d9e4c9', '#d2e1d8'];
 const linkColors = ['#6b956a', '#9c86b3', '#b39a58', '#6e9da0', '#ad8584', '#91a259'];
 const known = id => byId.has(id);
@@ -22,10 +24,13 @@ function readState() {
       orders: ['name', 'abbr', 'capital'].map((_, i) => validOrder(s.orders?.[i]) ? s.orders[i] : shuffle(ids)),
       muted: s.muted === true,
       mode: s.mode === 'match' ? 'match' : 'map',
+      roundIds: Object.fromEntries(['map', 'match'].map(mode => [mode, typeof s.roundIds?.[mode] === 'string' && s.roundIds[mode].length > 0 && s.roundIds[mode].length <= 128 ? s.roundIds[mode] : createRoundId()])),
     };
-  } catch { return { placed: new Set(), links: new Set(), orders: ['name', 'abbr', 'capital'].map(() => shuffle(PROVINCES.map(p => p.id))), muted: false, mode: 'map' }; }
+  } catch { return { placed: new Set(), links: new Set(), orders: ['name', 'abbr', 'capital'].map(() => shuffle(PROVINCES.map(p => p.id))), muted: false, mode: 'map', roundIds: { map: createRoundId(), match: createRoundId() } }; }
 }
 const state = readState();
+let activeMode = state.mode;
+let rewards = null;
 let selectedProvince = null;
 let selectedTile = null;
 let gesture = null;
@@ -40,7 +45,7 @@ let zoom = 1;
 let storageWarned = false;
 
 function save() {
-  try { localStorage.setItem(STORE, JSON.stringify({ placed: [...state.placed], links: [...state.links], orders: state.orders, muted: state.muted, mode: state.mode })); }
+  try { localStorage.setItem(STORE, JSON.stringify({ placed: [...state.placed], links: [...state.links], orders: state.orders, muted: state.muted, mode: state.mode, roundIds: state.roundIds })); }
   catch { if (!storageWarned) { storageWarned = true; toast('当前浏览器无法保存进度，本次仍可正常游玩。', true); } }
 }
 function svg(tag, attrs = {}) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; }
@@ -209,7 +214,7 @@ function connectTiles(a, b, point) {
 }
 function requestDraw() { if (drawFrame) return; drawFrame = requestAnimationFrame(() => { drawFrame = null; drawLines(); }); }
 function drawLines() {
-  if (state.mode !== 'match') return;
+  if (activeMode !== 'match') return;
   const holder = $('#connection-lines'), bounds = $('#match-board').getBoundingClientRect(); holder.replaceChildren();
   if (!bounds.width || !bounds.height) return;
   function curve(a, b, klass, color) {
@@ -232,25 +237,32 @@ function drawLines() {
   }
 }
 
+function roundCount(mode) { return mode === 'map' ? state.placed.size : PROVINCES.filter(p => matchComplete(p.id)).length; }
 function updateProgress() {
-  const n = state.mode === 'map' ? state.placed.size : PROVINCES.filter(p => matchComplete(p.id)).length;
-  $('#progress-count').textContent = n; $('#progress-fill').style.width = `${n / 34 * 100}%`;
-  $('.progress-track').setAttribute('aria-valuenow', n);
-  $('#progress-message').textContent = n === 34 ? '你点亮了一整片中国！' : n >= 24 ? '离通关越来越近啦' : n >= 10 ? '你的地理小宇宙正在发光' : '每一步，都是新的发现';
+  const collecting = activeMode === 'collection', max = collecting ? 12 : 34;
+  const n = collecting ? (rewards?.modelCount || 0) : roundCount(state.mode);
+  $('#progress-count').textContent = n; $('#progress-total').textContent = ` / ${max}`; $('#progress-fill').style.width = `${n / max * 100}%`;
+  $('.progress-track').setAttribute('aria-valuenow', n); $('.progress-track').setAttribute('aria-valuemax', max);
+  $('#progress-message').textContent = collecting ? `每次通关，都有一张新的收藏卡` : n === 34 ? '本轮奖励已入馆，再来一轮解锁新卡！' : n >= 24 ? '离通关奖励越来越近啦' : n >= 10 ? '你的地理小宇宙正在发光' : '每一步，都是新的发现';
+  $('#reward-goal').hidden = collecting;
+  if (!collecting) rewards?.renderGoal({ count: n, roundId: state.roundIds[state.mode] });
 }
 function setMode(mode) {
-  cancelGesture(); pan = null; selectedProvince = null; selectedTile = null; clearTimeout(winTimer); state.mode = mode;
+  cancelGesture(); pan = null; selectedProvince = null; selectedTile = null; clearTimeout(winTimer); activeMode = mode;
+  if (mode !== 'collection') state.mode = mode;
   $$('.tab').forEach(e => { const active = e.dataset.mode === mode; e.classList.toggle('active', active); e.setAttribute('aria-selected', String(active)); e.tabIndex = active ? 0 : -1; });
-  $('#map-panel').hidden = mode !== 'map'; $('#match-panel').hidden = mode !== 'match';
-  $('#mission-title').innerHTML = `${mode === 'map' ? '把名字，送回它的家' : '连起你的地理小宇宙'}<span class="heading-star">✦</span>`;
-  $('#mission-description').textContent = mode === 'map' ? '拖动右侧的省名，放到地图上对应的位置。' : '省名、简称、中心城市，三个好朋友，一起连起来。';
-  $('#progress-caption').textContent = mode === 'map' ? '探索进度' : '完成组数';
-  $('#footer-note').innerHTML = mode === 'map' ? '建议横屏游玩 <i>·</i> 触控与鼠标均可使用' : '直辖市使用市名 <i>·</i> 港澳不设省会';
+  $('#map-panel').hidden = mode !== 'map'; $('#match-panel').hidden = mode !== 'match'; $('#collection-panel').hidden = mode !== 'collection';
+  $('#mission-title').innerHTML = `${mode === 'map' ? '把名字，送回它的家' : mode === 'match' ? '连起你的地理小宇宙' : '把每一次进步，变成收藏'}<span class="heading-star">✦</span>`;
+  $('#mission-description').textContent = mode === 'map' ? '拖动右侧的省名，放到地图上对应的位置。' : mode === 'match' ? '省名、简称、中心城市，三个好朋友，一起连起来。' : '反复练习，逐辑收集。每完成一轮，就能获得一张新卡。';
+  $('#progress-caption').textContent = mode === 'map' ? '探索进度' : mode === 'match' ? '完成组数' : '型号收集';
+  $('#footer-note').innerHTML = mode === 'map' ? '建议横屏游玩 <i>·</i> 触控与鼠标均可使用' : mode === 'match' ? '直辖市使用市名 <i>·</i> 港澳不设省会' : '收藏仅保存在当前浏览器 <i>·</i> 重新挑战会保留收藏';
+  $('#restart').innerHTML = mode === 'collection' ? '<span aria-hidden="true">↩</span> 继续挑战' : '<span aria-hidden="true">↻</span> 重新开始';
+  if (mode === 'collection') rewards?.render();
   updateMap(); updateMatch(); updateProgress(); save();
 }
 $$('.tab').forEach(e => {
   e.addEventListener('click', () => setMode(e.dataset.mode));
-  e.addEventListener('keydown', ev => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) { ev.preventDefault(); const other = ev.key === 'Home' ? $('#tab-map') : ev.key === 'End' ? $('#tab-match') : e.dataset.mode === 'map' ? $('#tab-match') : $('#tab-map'); setMode(other.dataset.mode); other.focus(); } });
+  e.addEventListener('keydown', ev => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(ev.key)) { ev.preventDefault(); const tabs = $$('.tab'), index = tabs.indexOf(e), next = ev.key === 'Home' ? 0 : ev.key === 'End' ? tabs.length - 1 : (index + (ev.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; const other = tabs[next]; setMode(other.dataset.mode); other.focus(); } });
 });
 
 function startGesture(event, kind, element) {
@@ -314,10 +326,11 @@ $('#china-map').addEventListener('pointercancel', () => { pan = null; });
 
 function updateSoundButton() { $('#sound').setAttribute('aria-pressed', String(state.muted)); $('#sound').setAttribute('aria-label', state.muted ? '开启音效' : '关闭音效'); $('#sound').title = state.muted ? '开启音效' : '关闭音效'; }
 $('#sound').addEventListener('click', () => { state.muted = !state.muted; updateSoundButton(); save(); if (!state.muted) sound(); });
-$('#restart').addEventListener('click', () => { cancelGesture(); $('#restart-dialog').showModal(); });
+$('#restart').addEventListener('click', () => { if (activeMode === 'collection') { beginChallenge(state.mode); return; } cancelGesture(); $('#restart-dialog').showModal(); });
 $('#cancel-restart').addEventListener('click', () => $('#restart-dialog').close());
 function restartCurrent() {
   clearTimeout(winTimer); flashTimers.forEach(clearTimeout); flashTimers.clear(); $('#abbr-flash').replaceChildren(); $('#abbr-flash').hidden = true; selectedProvince = null; selectedTile = null;
+  state.roundIds[state.mode] = createRoundId();
   if (state.mode === 'map') { state.placed.clear(); zoom = 1; view = { x: 0, y: 0, w: 900, h: 620 }; applyView(); updateMap(); }
   else { state.links.clear(); state.orders = ['name', 'abbr', 'capital'].map(() => shuffle(PROVINCES.map(p => p.id))); createMatch(); $('#match-status').textContent = '从任意卡片出发，连接相邻两列中对应的卡片。'; }
   save(); updateProgress(); toast('新的探索，出发！');
@@ -326,9 +339,32 @@ $('#confirm-restart').addEventListener('click', () => { $('#restart-dialog').clo
 $('#about-button').addEventListener('click', () => $('#about-dialog').showModal());
 $$('.dialog-close,.dialog-close-button').forEach(e => e.addEventListener('click', () => e.closest('dialog').close()));
 $$('dialog').forEach(e => e.addEventListener('click', ev => { if (ev.target === e) { const r = e.getBoundingClientRect(); if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) e.close(); } }));
-function scheduleWin(mode) { clearTimeout(winTimer); winTimer = setTimeout(() => { if (state.mode !== mode) return; $('#win-message').textContent = mode === 'map' ? '34 个名字，都找到了自己的家。' : '省名、简称与中心城市，34 组全部连对！'; $('#other-mode').textContent = mode === 'map' ? '试试省名连连看 →' : '试试省份拖拽 →'; $('#win-dialog').showModal(); sound('win'); burst(innerWidth / 2, innerHeight * .3, 150); }, mode === 'map' ? (reducedMotion.matches ? 3750 : 2700) : 700); }
-$('#play-again').addEventListener('click', () => { $('#win-dialog').close(); restartCurrent(); });
-$('#other-mode').addEventListener('click', () => { $('#win-dialog').close(); setMode(state.mode === 'map' ? 'match' : 'map'); });
+function showWin(mode, receipt, celebrate = true) {
+  if (!receipt) return;
+  $('#win-dialog').dataset.mode = mode;
+  $('#win-message').textContent = mode === 'map' ? '34 个名字，都找到了自己的家。' : '省名、简称与中心城市，34 组全部连对！';
+  $('#other-mode').textContent = mode === 'map' ? '换成连连看，也能解锁新卡 →' : '换成省份拖拽，也能解锁新卡 →';
+  rewards.renderWin(receipt);
+  if (!$('#win-dialog').open) $('#win-dialog').showModal();
+  if (celebrate) { sound('win'); burst(innerWidth / 2, innerHeight * .3, 150); }
+}
+function scheduleWin(mode) {
+  clearTimeout(winTimer);
+  // Award synchronously before any animation delay or tab change can interrupt it.
+  const receipt = rewards.claim(mode, state.roundIds[mode]); updateProgress();
+  winTimer = setTimeout(() => { if (activeMode === mode) showWin(mode, receipt); }, mode === 'map' ? (reducedMotion.matches ? 3750 : 2700) : 700);
+}
+function beginChallenge(mode) {
+  $('#win-dialog').close(); setMode(mode);
+  if (roundCount(mode) === 34) restartCurrent();
+}
+$('#play-again').addEventListener('click', () => { const mode = $('#win-dialog').dataset.mode; $('#win-dialog').close(); setMode(mode); restartCurrent(); });
+$('#other-mode').addEventListener('click', () => beginChallenge($('#win-dialog').dataset.mode === 'map' ? 'match' : 'map'));
+$('#reward-goal').addEventListener('click', () => {
+  const earned = rewards.getClaim(state.roundIds[state.mode]);
+  if (earned) showWin(state.mode, earned, false);
+  else rewards.showDetail($('#reward-goal').dataset.gun, Number($('#reward-goal').dataset.edition));
+});
 
 const canvas = $('#confetti'), ctx = canvas.getContext('2d');
 let particles = [], animationFrame, lastTime = 0;
@@ -349,4 +385,8 @@ function animateParticles(now) {
 window.addEventListener('resize', () => { sizeCanvas(); requestDraw(); });
 window.addEventListener('scroll', requestDraw, { passive: true });
 new ResizeObserver(requestDraw).observe($('#match-board'));
+rewards = createCollectionUI({ onChange: updateProgress, onPlay: () => beginChallenge(state.mode), onView: () => setMode('collection'), onToast: toast });
+// Persist round identities before migrating any already-completed legacy games.
+save();
+for (const mode of ['map', 'match']) if (roundCount(mode) === 34) rewards.claim(mode, state.roundIds[mode]);
 createMap(); createMatch(); updateSoundButton(); applyView(); sizeCanvas(); setMode(state.mode);

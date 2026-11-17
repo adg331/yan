@@ -4,16 +4,19 @@ import { readFile } from 'node:fs/promises';
 import { JSDOM } from 'jsdom';
 import { PROVINCES } from '../geo/data/provinces.js';
 import { MAP, SOUTH_SEA_VIEW } from '../geo/data/map.js';
+import { GUNS } from '../geo/data/rewards.js';
+import { COLLECTION_STORE, editionName, normalizeCollection, nextReward, claimReward } from '../geo/collection.js';
 
 const html = await readFile(new URL('../geo/index.html', import.meta.url), 'utf8');
 const code = (await readFile(new URL('../geo/app.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '');
+const collectionUI = (await readFile(new URL('../geo/collection-ui.js', import.meta.url), 'utf8')).replace(/^import .*;\n/gm, '').replace('export function', 'function');
 const key = 'yan.geo.progress.v1';
 
-function launch(saved) {
+function launch(saved, collectionSaved) {
   const dom = new JSDOM(html, { url: 'http://localhost/yan/geo/', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window;
   let oscillators = 0;
-  Object.assign(w, { PROVINCES, MAP, SOUTH_SEA_VIEW });
+  Object.assign(w, { PROVINCES, MAP, SOUTH_SEA_VIEW, GUNS, COLLECTION_STORE, editionName, normalizeCollection, nextReward, claimReward });
   w.matchMedia = () => ({ matches: false });
   w.ResizeObserver = class { observe() {} };
   w.HTMLCanvasElement.prototype.getContext = () => null;
@@ -35,12 +38,15 @@ function launch(saved) {
     return { left: x, top: y, x, y, width: 130, height: 27, right: x + 130, bottom: y + 27 };
   };
   if (saved !== undefined) w.localStorage.setItem(key, typeof saved === 'string' ? saved : JSON.stringify(saved));
+  if (collectionSaved !== undefined) w.localStorage.setItem(COLLECTION_STORE, typeof collectionSaved === 'string' ? collectionSaved : JSON.stringify(collectionSaved));
+  w.eval(collectionUI);
   w.eval(code);
   const q = selector => w.document.querySelector(selector);
   const click = selector => { const el = typeof selector === 'string' ? q(selector) : selector; assert.ok(el, `Missing ${selector}`); el.click(); };
   const tile = (col, id) => q(`.match-tile[data-col="${col}"][data-id="${id}"]`);
   const progress = () => Number(q('#progress-count').textContent);
   const stored = () => JSON.parse(w.localStorage.getItem(key));
+  const collected = () => JSON.parse(w.localStorage.getItem(COLLECTION_STORE) || '{"receipts":[]}');
   function pointer(target, type, x, y) {
     const ev = new w.MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
     Object.defineProperties(ev, { pointerId: { value: 1 }, isPrimary: { value: true } }); target.dispatchEvent(ev);
@@ -55,7 +61,7 @@ function launch(saved) {
     w.document.elementFromPoint = () => target;
     pointer(source, 'pointerdown', 20, 20); pointer(w.document, 'pointermove', 400, 300); pointer(w.document, 'pointerup', 400, 300);
   }
-  return { w, q, click, tile, progress, stored, dragMap, dragLine, sounds: () => oscillators, close: () => w.close() };
+  return { w, q, click, tile, progress, stored, collected, dragMap, dragLine, sounds: () => oscillators, close: () => w.close() };
 }
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -129,10 +135,11 @@ test('all 34 matching groups can finish, render 68 fixed links, celebrate and re
       app.click(app.tile('abbr', p.id)); app.click(app.tile('capital', p.id));
     }
     assert.equal(app.progress(), 34); assert.equal(app.stored().links.length, 68);
+    assert.equal(app.collected().receipts.length, 1); assert.equal(app.collected().receipts[0].mode, 'match');
     await wait(800);
     assert.equal(app.w.document.querySelectorAll('#connection-lines .connection').length, 68);
     assert.ok(app.q('#win-dialog').open);
-    app.click('#play-again'); assert.equal(app.progress(), 0); assert.equal(app.stored().links.length, 0); assert.ok(!app.q('#win-dialog').open);
+    app.click('#play-again'); assert.equal(app.progress(), 0); assert.equal(app.stored().links.length, 0); assert.ok(!app.q('#win-dialog').open); assert.equal(app.collected().receipts.length, 1);
   } finally { app.close(); }
 });
 
@@ -176,4 +183,69 @@ test('corrupt or stale saved state recovers without accepting invalid IDs or inc
       assert.ok(app.stored().links.every(k => k === 'a:340000'));
     } finally { app.close(); }
   }
+});
+
+test('each completed round grants a distinct reward; replay and reload never re-award the same round', () => {
+  let app = launch(), progress, collection;
+  try {
+    for (const p of PROVINCES.slice(0, 33)) app.dragMap(p.id, p.id);
+    assert.equal(app.collected().receipts.length, 0, 'partial progress is not a full-round reward');
+    const p = PROVINCES[33]; app.dragMap(p.id, p.id);
+    assert.equal(app.collected().receipts.length, 1, 'reward is saved before the celebration delay');
+    app.click('#reward-goal'); app.q('#win-dialog').close(); app.click('#reward-goal');
+    assert.equal(app.collected().receipts.length, 1, 'viewing a reward is idempotent');
+    progress = app.stored(); collection = app.collected();
+  } finally { app.close(); }
+  app = launch(progress, collection);
+  try {
+    assert.equal(app.collected().receipts.length, 1, 'reload of a finished board must not grant again');
+    app.click('#reward-goal'); app.click('#play-again');
+    assert.equal(app.progress(), 0); assert.equal(app.collected().receipts.length, 1);
+    assert.notEqual(app.stored().roundIds.map, progress.roundIds.map);
+    for (const p of PROVINCES) app.dragMap(p.id, p.id);
+    assert.equal(app.collected().receipts.length, 2);
+    assert.equal(new Set(app.collected().receipts.map(r => r.gunId)).size, 2);
+  } finally { app.close(); }
+});
+
+test('collection tab and wish selection preserve learning progress, and new rewards honor the wish', () => {
+  const app = launch();
+  try {
+    app.dragMap(PROVINCES[0].id, PROVINCES[0].id);
+    app.click('#tab-collection'); assert.ok(!app.q('#collection-panel').hidden);
+    assert.equal(app.w.document.querySelectorAll('.collection-card').length, 12);
+    app.click('.collection-card[data-gun="aug"]'); assert.ok(app.q('#card-dialog').open);
+    app.click('#wish-button'); assert.equal(app.collected().wish, 'aug');
+    app.click('#continue-challenge'); assert.equal(app.progress(), 1);
+    assert.equal(app.q('#reward-goal').dataset.gun, 'aug');
+    for (const p of PROVINCES.slice(1)) app.dragMap(p.id, p.id);
+    assert.equal(app.collected().receipts[0].gunId, 'aug');
+    app.click('#tab-collection'); assert.equal(app.progress(), 1);
+    assert.equal(app.q('.collection-card[data-gun="aug"]').classList.contains('owned'), true);
+    app.click('#continue-challenge'); assert.equal(app.progress(), 0); assert.equal(app.collected().receipts.length, 1);
+  } finally { app.close(); }
+});
+
+test('switching tabs during the celebration delay cannot lose a reward, and abandoned rounds grant nothing', () => {
+  const app = launch();
+  try {
+    for (const p of PROVINCES) app.dragMap(p.id, p.id);
+    app.click('#tab-collection'); assert.equal(app.collected().receipts.length, 1);
+    app.click('#tab-match');
+    app.dragLine('name', '340000', 'abbr', '340000'); app.dragLine('abbr', '340000', 'capital', '340000');
+    app.click('#restart'); app.click('#confirm-restart');
+    assert.equal(app.progress(), 0); assert.equal(app.collected().receipts.length, 1);
+    app.click('#tab-map'); app.click('#reward-goal'); assert.ok(app.q('#win-dialog').open);
+    assert.equal(app.collected().receipts.length, 1);
+  } finally { app.close(); }
+});
+
+test('legacy completed games receive one migration reward per mode, with durable round identities', () => {
+  const saved = { placed: PROVINCES.map(p => p.id), links: PROVINCES.flatMap(p => [`a:${p.id}`, `b:${p.id}`]), mode: 'map' };
+  let app = launch(saved), progress, collection;
+  try { assert.equal(app.collected().receipts.length, 2); progress = app.stored(); collection = app.collected(); }
+  finally { app.close(); }
+  app = launch(progress, collection);
+  try { assert.equal(app.collected().receipts.length, 2); assert.deepEqual(app.stored().roundIds, progress.roundIds); }
+  finally { app.close(); }
 });
