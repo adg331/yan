@@ -113,33 +113,86 @@ test('map tap fallback, small-area inset and pointer cancellation work', () => {
   } finally { app.close(); }
 });
 
-test('34 matching groups are present; skip-column and incorrect links fail; both links are required', () => {
+test('capital and abbreviation levels show six pairs, reject wrong links, and complete independently', () => {
   const app = launch();
   try {
-    app.click('#tab-match');
-    for (const id of ['#match-names', '#match-abbrs', '#match-capitals']) assert.equal(app.q(id).children.length, 34);
-    app.dragLine('name', '340000', 'capital', '340000'); assert.equal(app.stored().links.length, 0);
-    app.dragLine('name', '340000', 'abbr', '350000'); assert.equal(app.stored().links.length, 0);
-    app.dragLine('name', '340000', 'abbr', '340000'); assert.equal(app.progress(), 0); assert.equal(app.stored().links.length, 1);
-    app.dragLine('capital', '340000', 'abbr', '340000'); assert.equal(app.progress(), 1); assert.equal(app.stored().links.length, 2);
-    assert.ok(app.tile('capital', '340000').classList.contains('is-done'));
+    app.click('#tab-capital');
+    assert.equal(app.q('#match-names').children.length, 6);
+    assert.equal(app.q('#match-targets').children.length, 6);
+    assert.equal(app.q('#match-target-title').textContent, '省会 / 首府');
+    assert.equal(app.q('#match-panel').getAttribute('aria-labelledby'), 'tab-capital');
+    const [a, b] = PROVINCES;
+    app.dragLine('name', a.id, 'name', b.id); assert.equal(app.progress(), 0);
+    app.dragLine('name', a.id, 'capital', b.id); assert.equal(app.progress(), 0);
+    app.dragLine('capital', a.id, 'name', a.id); assert.equal(app.progress(), 1);
+    assert.ok(app.tile('capital', a.id).classList.contains('is-done'));
+    app.click('#tab-abbr'); assert.equal(app.progress(), 0);
+    assert.equal(app.q('#match-target-title').textContent, '简称');
+    assert.equal(app.q('#match-panel').getAttribute('aria-labelledby'), 'tab-abbr');
+    assert.equal(app.q('.match-tile[data-col="capital"]'), null);
+    app.click(app.tile('name', a.id)); app.click(app.tile('abbr', a.id)); assert.equal(app.progress(), 1);
+    app.click('#tab-capital'); assert.equal(app.progress(), 1);
+    assert.equal(app.stored().links.length, 2);
   } finally { app.close(); }
 });
 
-test('all 34 matching groups can finish, render 68 fixed links, celebrate and restart', async () => {
+test('all six batches cover 34 unique pairs per level, award independently, and restart only one level', async () => {
   const app = launch();
   try {
-    app.click('#tab-match');
-    for (const p of PROVINCES) {
-      app.click(app.tile('name', p.id)); app.click(app.tile('abbr', p.id));
-      app.click(app.tile('abbr', p.id)); app.click(app.tile('capital', p.id));
+    for (const mode of ['capital', 'abbr']) {
+      app.click(`#tab-${mode}`);
+      const seen = new Set();
+      for (let page = 0; page < 6; page++) {
+        assert.equal(app.q('#match-names').children.length, page === 5 ? 4 : 6);
+        const ids = [...app.q('#match-names').children].map(e => e.dataset.id);
+        assert.deepEqual(ids, PROVINCES.slice(page * 6, (page + 1) * 6).map(p => p.id));
+        assert.deepEqual(new Set([...app.q('#match-targets').children].map(e => e.dataset.id)), new Set(ids));
+        for (const id of ids) {
+          assert.ok(!seen.has(id)); seen.add(id);
+          app.click(app.tile('name', id)); app.click(app.tile(mode, id));
+        }
+        assert.equal(app.q(`#match-steps [data-page="${page}"]`).classList.contains('complete'), true);
+        await wait(25);
+        assert.equal(app.w.document.querySelectorAll('#connection-lines .connection').length, ids.length);
+        if (page < 5) { assert.ok(app.q('#match-next').classList.contains('ready')); app.click('#match-next'); }
+      }
+      assert.equal(seen.size, 34); assert.equal(app.progress(), 34);
+      assert.ok(app.q('#match-next').disabled);
+      await wait(750); assert.ok(app.q('#win-dialog').open);
+      app.q('#win-dialog').close();
     }
-    assert.equal(app.progress(), 34); assert.equal(app.stored().links.length, 68);
-    assert.equal(app.collected().receipts.length, 1); assert.equal(app.collected().receipts[0].mode, 'match');
-    await wait(800);
-    assert.equal(app.w.document.querySelectorAll('#connection-lines .connection').length, 68);
-    assert.ok(app.q('#win-dialog').open);
-    app.click('#play-again'); assert.equal(app.progress(), 0); assert.equal(app.stored().links.length, 0); assert.ok(!app.q('#win-dialog').open); assert.equal(app.collected().receipts.length, 1);
+    assert.deepEqual(app.collected().receipts.map(r => r.mode), ['capital', 'abbr']);
+    app.click('#reward-goal'); app.click('#play-again');
+    assert.equal(app.progress(), 0); assert.equal(app.stored().pages.abbr, 0);
+    assert.equal(app.stored().links.length, 34); assert.equal(app.collected().receipts.length, 2);
+    app.click('#tab-capital'); assert.equal(app.progress(), 34);
+    assert.equal(app.stored().pages.capital, 5);
+  } finally { app.close(); }
+});
+
+test('batch navigation clears selection and lines, permits skipped batches, and retains per-level pages on reload', async () => {
+  let app = launch(), saved;
+  try {
+    app.click('#tab-capital'); assert.ok(app.q('#match-prev').disabled);
+    const id = PROVINCES[0].id;
+    app.dragLine('name', id, 'capital', id);
+    app.click(app.tile('name', PROVINCES[1].id));
+    app.click('#match-next');
+    assert.equal(app.stored().pages.capital, 1);
+    assert.equal(app.q('.match-tile.selected'), null); assert.ok(app.q('#clear-selection').disabled);
+    await wait(25); assert.equal(app.q('#connection-lines').children.length, 0);
+    app.click('#match-steps [data-page="5"]'); assert.equal(app.q('#match-names').children.length, 4);
+    app.click('#tab-abbr'); assert.equal(app.stored().pages.abbr, 0);
+    app.click('#match-next'); app.click('#match-next');
+    saved = app.stored();
+  } finally { app.close(); }
+  app = launch(saved);
+  try {
+    assert.equal(app.q('#tab-abbr').getAttribute('aria-selected'), 'true');
+    assert.equal(app.q('#match-page-label').textContent, '第 3 / 6 批');
+    app.click('#tab-capital'); assert.equal(app.q('#match-page-label').textContent, '第 6 / 6 批');
+    app.click('#match-steps [data-page="0"]'); assert.equal(app.progress(), 1);
+    assert.ok(app.tile('name', PROVINCES[0].id).classList.contains('is-done'));
   } finally { app.close(); }
 });
 
@@ -158,18 +211,18 @@ test('all 34 map drops finish and celebrate after the final abbreviation flashes
 test('reload retains separate progress and shuffled orders; restart is scoped; muted sound creates no tones', () => {
   let app = launch(), saved;
   try {
-    app.dragMap('340000', '340000'); app.click('#tab-match'); app.dragLine('name', '350000', 'abbr', '350000');
+    app.dragMap('340000', '340000'); app.click('#tab-capital'); app.dragLine('name', '350000', 'capital', '350000');
     saved = app.stored();
   } finally { app.close(); }
   app = launch(saved);
   try {
-    assert.equal(app.q('#tab-match').getAttribute('aria-selected'), 'true');
+    assert.equal(app.q('#tab-capital').getAttribute('aria-selected'), 'true');
     assert.deepEqual(app.stored().orders, saved.orders); assert.equal(app.stored().links.length, 1);
     app.click('#tab-map'); assert.equal(app.progress(), 1);
     app.click('#sound'); const before = app.sounds(); app.dragMap('350000', '350000'); assert.equal(app.sounds(), before);
     app.click('#restart'); app.click('#cancel-restart'); assert.equal(app.progress(), 2);
     app.click('#restart'); app.click('#confirm-restart'); assert.equal(app.progress(), 0);
-    app.click('#tab-match'); assert.equal(app.stored().links.length, 1);
+    app.click('#tab-capital'); assert.equal(app.stored().links.length, 1);
   } finally { app.close(); }
 });
 
@@ -231,8 +284,8 @@ test('switching tabs during the celebration delay cannot lose a reward, and aban
   try {
     for (const p of PROVINCES) app.dragMap(p.id, p.id);
     app.click('#tab-collection'); assert.equal(app.collected().receipts.length, 1);
-    app.click('#tab-match');
-    app.dragLine('name', '340000', 'abbr', '340000'); app.dragLine('abbr', '340000', 'capital', '340000');
+    app.click('#tab-capital');
+    app.dragLine('name', '340000', 'capital', '340000');
     app.click('#restart'); app.click('#confirm-restart');
     assert.equal(app.progress(), 0); assert.equal(app.collected().receipts.length, 1);
     app.click('#tab-map'); app.click('#reward-goal'); assert.ok(app.q('#win-dialog').open);
@@ -248,4 +301,28 @@ test('legacy completed games receive one migration reward per mode, with durable
   app = launch(progress, collection);
   try { assert.equal(app.collected().receipts.length, 2); assert.deepEqual(app.stored().roundIds, progress.roundIds); }
   finally { app.close(); }
+});
+
+test('old partial links migrate separately, and an already rewarded old round does not grant duplicate cards', () => {
+  let app = launch({ mode: 'match', placed: ['340000'], links: ['a:340000', 'b:350000'], roundIds: { match: 'old-partial' } });
+  try {
+    assert.equal(app.q('#tab-capital').getAttribute('aria-selected'), 'true'); assert.equal(app.progress(), 1);
+    assert.ok(app.tile('capital', '350000').classList.contains('is-done'));
+    app.click('#tab-abbr'); assert.equal(app.progress(), 1);
+    assert.ok(app.tile('abbr', '340000').classList.contains('is-done'));
+    app.click('#restart'); app.click('#confirm-restart'); assert.equal(app.progress(), 0);
+    app.click('#tab-capital'); assert.equal(app.progress(), 1);
+    app.click('#tab-map'); assert.equal(app.progress(), 1);
+  } finally { app.close(); }
+  const progress = { mode: 'match', links: PROVINCES.flatMap(p => [`a:${p.id}`, `b:${p.id}`]), roundIds: { match: 'old-finished' } };
+  const collection = claimReward(normalizeCollection({}), { mode: 'match', roundId: 'old-finished' }).collection;
+  app = launch(progress, collection);
+  try {
+    assert.equal(app.progress(), 34); assert.equal(app.collected().receipts.length, 1);
+    app.click('#tab-abbr'); assert.equal(app.progress(), 34); assert.equal(app.collected().receipts.length, 1);
+    app.click('#restart'); app.click('#confirm-restart');
+    assert.equal(app.progress(), 0); assert.notEqual(app.stored().roundIds.abbr, 'old-finished');
+    app.click('#tab-capital'); assert.equal(app.progress(), 34);
+    assert.equal(app.stored().roundIds.capital, 'old-finished');
+  } finally { app.close(); }
 });

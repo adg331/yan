@@ -9,7 +9,7 @@ export function createCollectionUI({ onChange, onPlay, onView, onToast }) {
   let displayEdition = Math.floor(collection.receipts.length / GUNS.length);
   let detail = null;
   let saveWarned = false;
-  const modeName = mode => mode === 'map' ? '省份拖拽' : '省名连连看';
+  const modeName = mode => ({ map: '省份拖拽', capital: '省名配省会', abbr: '省名配简称', match: '省名连连看' })[mode];
   const receiptFor = (id, edition) => collection.receipts.find(r => r.id === `${id}@${edition}`);
   const art = (gun, locked = false, lazy = false) => `<div class="gun-art${locked ? ' gun-locked' : ''}"><img src="${gun.image}" alt="${locked ? `${gun.name} 待解锁轮廓` : gun.imageAlt}" ${lazy ? 'loading="lazy"' : ''} decoding="async"></div>`;
 

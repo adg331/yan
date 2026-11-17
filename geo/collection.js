@@ -8,7 +8,7 @@ export function editionName(edition) {
 export function normalizeCollection(raw) {
   const receipts = [], rounds = new Set(), cards = new Set();
   for (const item of Array.isArray(raw?.receipts) ? raw.receipts : []) {
-    if (!item || !validGun.has(item.gunId) || !['map', 'match'].includes(item.mode)) continue;
+    if (!item || !validGun.has(item.gunId) || !['map', 'match', 'capital', 'abbr'].includes(item.mode)) continue;
     if (typeof item.roundId !== 'string' || !item.roundId || item.roundId.length > 128) continue;
     if (item.edition !== Math.floor(receipts.length / GUNS.length)) continue;
     const id = `${item.gunId}@${item.edition}`;
@@ -27,7 +27,7 @@ export function nextReward(collection) {
   return { gunId: gun.id, edition, id: `${gun.id}@${edition}` };
 }
 export function claimReward(collection, { mode, roundId, earnedAt = Date.now() }) {
-  if (!['map', 'match'].includes(mode) || typeof roundId !== 'string' || !roundId || roundId.length > 128) throw new Error('Invalid completed round');
+  if (!['map', 'match', 'capital', 'abbr'].includes(mode) || typeof roundId !== 'string' || !roundId || roundId.length > 128) throw new Error('Invalid completed round');
   const previous = collection.receipts.find(r => r.roundId === roundId);
   if (previous) return { collection, receipt: previous, isNew: false };
   const receipt = { ...nextReward(collection), sequence: collection.receipts.length + 1, mode, roundId, earnedAt };

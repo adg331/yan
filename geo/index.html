@@ -15,15 +15,16 @@
   <link rel="apple-touch-icon" sizes="167x167" href="./icons/apple-touch-icon-167.png">
   <link rel="apple-touch-icon" sizes="152x152" href="./icons/apple-touch-icon-152.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=split-levels-2">
   <link rel="stylesheet" href="./collection.css">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="../" aria-label="返回 yan 首页"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="1" y="1" width="38" height="38" rx="13" fill="#24785f"/><circle cx="20" cy="20" r="12" fill="none" stroke="#d7efb1" stroke-width="1.5"/><ellipse cx="20" cy="20" rx="5.8" ry="12" fill="none" stroke="#d7efb1" stroke-width="1.5"/><path d="M8 20h24M10 14h20M10 26h20" fill="none" stroke="#d7efb1" stroke-width="1.2"/></svg><span>geo<span class="brand-dot">.</span></span><small>小小地理探险家</small></a>
     <nav class="tabs" role="tablist" aria-label="选择游戏">
-      <button id="tab-map" class="tab active" role="tab" aria-selected="true" aria-controls="map-panel" data-mode="map"><span aria-hidden="true">◈</span> 省份拖拽</button>
-      <button id="tab-match" class="tab" role="tab" aria-selected="false" aria-controls="match-panel" data-mode="match" tabindex="-1"><span aria-hidden="true">⌁</span> 省名连连看</button>
+      <button id="tab-map" class="tab active" role="tab" aria-selected="true" aria-controls="map-panel" data-mode="map"><span aria-hidden="true">1</span> 省份拖拽</button>
+      <button id="tab-capital" class="tab" role="tab" aria-selected="false" aria-controls="match-panel" data-mode="capital" tabindex="-1"><span aria-hidden="true">2</span> 省名配省会</button>
+      <button id="tab-abbr" class="tab" role="tab" aria-selected="false" aria-controls="match-panel" data-mode="abbr" tabindex="-1"><span aria-hidden="true">3</span> 省名配简称</button>
       <button id="tab-collection" class="tab" role="tab" aria-selected="false" aria-controls="collection-panel" data-mode="collection" tabindex="-1"><span aria-hidden="true">✧</span> 名枪收藏 <b id="collection-badge" class="collection-badge">0</b></button>
     </nav>
     <div class="header-actions"><button id="sound" class="icon-button" aria-label="关闭音效" aria-pressed="false" title="关闭音效"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Zm4 3c3 2 3 6 0 8m3-11c5 4 5 10 0 14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg></button><button id="restart" class="reset-button"><span aria-hidden="true">↻</span> 重新开始</button></div>
@@ -43,7 +44,17 @@
       </div>
       <aside class="candidates-card" aria-label="待放置的省名"><div class="candidates-title"><h2>省名候选</h2><span id="remaining">34 个待探索</span></div><p class="sort-note">A — Z <span>按汉语拼音排序</span></p><div id="candidates" class="candidates"></div><div id="candidates-complete" class="candidates-complete" hidden><span>✦</span><strong>每个名字都到家啦！</strong><p>你已经点亮了整张地图</p></div><div class="candidate-note"><span>✧</span> 慢慢来，每次尝试都算数</div></aside>
     </section>
-    <section id="match-panel" role="tabpanel" aria-labelledby="tab-match" class="game-panel match-panel" hidden><div class="match-topline"><span><span class="tiny-star">✦</span> 34 组全部在这里，试着把三个好朋友连起来</span><span class="match-tip">拖线连接 · 也可依次点击</span></div><div id="match-board" class="match-board"><svg id="connection-lines" aria-hidden="true"></svg><div class="match-column" data-column="name"><h2><span>01</span> 省名 <small>从这里出发</small></h2><div id="match-names" class="match-grid"></div></div><div class="match-column" data-column="abbr"><h2><span>02</span> 简称 <small>找到小名</small></h2><div id="match-abbrs" class="match-grid"></div></div><div class="match-column" data-column="capital"><h2><span>03</span> 省会 / 首府 <small>认识中心城市</small></h2><div id="match-capitals" class="match-grid"></div></div></div><div class="match-bottom"><span id="match-status" role="status">从任意卡片出发，连接相邻两列中对应的卡片。</span><button id="clear-selection">取消选择</button></div></section>
+    <section id="match-panel" role="tabpanel" aria-labelledby="tab-capital" class="game-panel match-panel" hidden>
+      <div class="match-topline"><div><span class="match-kicker">分批小挑战</span><strong id="match-page-label">第 1 / 6 批</strong><span id="match-range"></span></div><span class="match-tip">拖线连接 · 也可依次点击</span></div>
+      <div class="match-toolbar"><nav id="match-steps" class="match-steps" aria-label="选择配对批次"></nav><span id="match-batch-progress" role="status">本批 0 / 6 对</span></div>
+      <div id="match-board" class="match-board">
+        <svg id="connection-lines" aria-hidden="true"></svg>
+        <div class="match-column" data-column="name"><h2><span>01</span> 省名 <small>按拼音排列，方便找名字</small></h2><div id="match-names" class="match-grid"></div></div>
+        <div id="match-target-column" class="match-column" data-column="capital"><h2><span>02</span> <b id="match-target-title">省会 / 首府</b> <small id="match-target-note">找到中心城市</small></h2><div id="match-targets" class="match-grid"></div></div>
+      </div>
+      <div class="match-bottom"><span id="match-status" role="status">先选一张省名，再选右侧对应的卡片；也可以拖线连接。</span><button id="clear-selection">取消选择</button></div>
+      <div class="match-pagination"><button id="match-prev">← 上一批</button><span>每屏最多 6 对 · 共 34 对</span><button id="match-next">下一批 →</button></div>
+    </section>
     <section id="collection-panel" role="tabpanel" aria-labelledby="tab-collection" class="game-panel collection-panel" hidden>
       <div class="collection-toolbar"><div><span class="collection-eyebrow">EXPLORER'S COLLECTION</span><h2>每一轮探索，都值得珍藏</h2></div><div class="collection-controls"><span>累计通关 <b id="rounds-count">0</b> 次</span><label>收藏辑 <select id="edition-select" aria-label="选择收藏版本"></select></label></div></div>
       <p id="collection-guide" class="collection-guide">选择一张心愿卡，完成任意玩法的 34 组挑战即可获得。</p>
@@ -55,9 +66,9 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <canvas id="confetti" aria-hidden="true"></canvas>
   <dialog id="win-dialog" class="win-dialog win-with-reward"><button class="dialog-close" aria-label="关闭">×</button><div class="win-medal">✦</div><p class="eyebrow">MISSION COMPLETE · NEW COLLECTION</p><h2>又一次，把中国记得更牢！</h2><p id="win-message">34 个名字，都找到了自己的家。</p><div id="win-reward" class="win-reward"></div><div class="win-stats"><strong>34 / 34</strong><span id="win-collection-count">收藏已自动保存</span></div><button id="play-again" class="primary-button">下一轮，解锁新奖励 ↻</button><button id="view-collection" class="secondary-button">看看我的收藏 →</button><button id="other-mode" class="secondary-button">试试省名连连看 →</button></dialog>
-  <dialog id="restart-dialog" class="info-dialog"><h2>重新开始这一关？</h2><p>当前玩法的进度会清空，另一个玩法不受影响。已经获得的收藏卡永久保留在当前浏览器中。</p><div class="dialog-actions"><button id="cancel-restart" class="secondary-button">继续探索</button><button id="confirm-restart" class="primary-button">重新开始</button></div></dialog>
+  <dialog id="restart-dialog" class="info-dialog"><h2>重新开始这一关？</h2><p>当前关卡的进度会清空，其他关卡不受影响。已经获得的收藏卡永久保留在当前浏览器中。</p><div class="dialog-actions"><button id="cancel-restart" class="secondary-button">继续探索</button><button id="confirm-restart" class="primary-button">重新开始</button></div></dialog>
   <dialog id="card-dialog" class="card-dialog"><button class="dialog-close" aria-label="关闭">×</button><div id="card-detail"></div><button id="wish-button" class="primary-button">设为下一轮奖励</button><button id="card-play" class="secondary-button">继续地理挑战 →</button></dialog>
-  <dialog id="about-dialog" class="info-dialog"><button class="dialog-close" aria-label="关闭">×</button><p class="eyebrow">LITTLE GUIDE</p><h2>你好，小小探索家</h2><h3>省份拖拽</h3><p>拖动省名卡片到正确省份，或先点卡片、再点地图。答对后，简称会闪现 3 次。小面积区域可以放到下方的放大图里。使用 ＋ / − 放大缩小，放大后可以拖动空白海面移动地图。</p><h3>省名连连看</h3><p>34 组全部同时展示。连接省名与简称，再连接简称与省会；也可从右往左连接。整组的两条线都正确才算完成。可以拖线，也可以依次点击两张卡片。</p><h3>每轮通关都有新收藏</h3><p>任意玩法完成全部 34 组后，自动获得一张新枪械收藏卡。前 12 次收集不同型号；集齐一辑后，继续解锁银辉、金边、星空和后续纪念版本。顶部的“名枪收藏”可以查看卡片、选择下一张心愿奖励。重新挑战保留收藏，连连看每轮重新打乱排列；同一轮只发奖一次。</p><h3>一点地理知识</h3><p>自治区的行政中心称首府。直辖市不设省会，第三列使用市名并标注“直辖市”；港澳的卡片标注“不设省会”。部分地区有多个常用简称，合并展示在同一张卡片上。</p><h3>资料来源</h3><p>省界图形：<a href="https://datav.aliyun.com/portal/school/atlas/area_selector" target="_blank" rel="noopener">阿里云 DataV 地理工具</a>，已保留台湾、南海诸岛与来源中的海上断续线。知识资料：<a href="https://r1-ndr.ykt.cbern.com.cn/edu_product/esp/assets/1a27180c-f282-4d45-b3ce-138c72905df4.pkg/pdf.pdf" target="_blank" rel="noopener">国家中小学智慧教育平台地理教材</a>。本图为互动学习示意，不用于测绘。</p><p class="privacy-note">进度仅保存在当前浏览器；不需要账号，不上传儿童信息。</p><button class="primary-button dialog-close-button">开始探索</button></dialog>
-  <script type="module" src="./app.js?v=collections-1"></script>
+  <dialog id="about-dialog" class="info-dialog"><button class="dialog-close" aria-label="关闭">×</button><p class="eyebrow">LITTLE GUIDE</p><h2>你好，小小探索家</h2><h3>省份拖拽</h3><p>拖动省名卡片到正确省份，或先点卡片、再点地图。答对后，简称会闪现 3 次。小面积区域可以放到下方的放大图里。使用 ＋ / − 放大缩小，放大后可以拖动空白海面移动地图。</p><h3>第 2 关 · 省名配省会 / 第 3 关 · 省名配简称</h3><p>两关分别练习，每屏最多 6 对，共 6 批。左侧省名按拼音排列，右侧卡片打乱顺序。拖线连接或依次点击两列对应的卡片，也可以从右向左连接。一条线正确就完成一对。点击“下一批”继续，也可用上方数字跳到任意批次；每关的进度和当前批次分别保存。</p><h3>每轮通关都有新收藏</h3><p>任意玩法完成全部 34 组后，自动获得一张新枪械收藏卡。前 12 次收集不同型号；集齐一辑后，继续解锁银辉、金边、星空和后续纪念版本。顶部的“名枪收藏”可以查看卡片、选择下一张心愿奖励。重新挑战保留收藏，连连看每轮重新打乱排列；同一轮只发奖一次。</p><h3>一点地理知识</h3><p>自治区的行政中心称首府。直辖市不设省会，省会卡片使用市名并标注“直辖市”；港澳的卡片标注“不设省会”。部分地区有多个常用简称，合并展示在同一张卡片上。</p><h3>资料来源</h3><p>省界图形：<a href="https://datav.aliyun.com/portal/school/atlas/area_selector" target="_blank" rel="noopener">阿里云 DataV 地理工具</a>，已保留台湾、南海诸岛与来源中的海上断续线。知识资料：<a href="https://r1-ndr.ykt.cbern.com.cn/edu_product/esp/assets/1a27180c-f282-4d45-b3ce-138c72905df4.pkg/pdf.pdf" target="_blank" rel="noopener">国家中小学智慧教育平台地理教材</a>。本图为互动学习示意，不用于测绘。</p><p class="privacy-note">进度仅保存在当前浏览器；不需要账号，不上传儿童信息。</p><button class="primary-button dialog-close-button">开始探索</button></dialog>
+  <script type="module" src="./app.js?v=split-levels-2"></script>
 </body>
 </html>

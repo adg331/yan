@@ -19,7 +19,7 @@ test('120 successive completed rounds yield 120 unique cards, without a collecti
   let state = normalizeCollection({});
   const cardIds = new Set();
   for (let i = 0; i < 120; i++) {
-    const result = claimReward(state, { mode: i % 2 ? 'match' : 'map', roundId: `round-${i}`, earnedAt: i }); state = result.collection;
+    const result = claimReward(state, { mode: ['map', 'capital', 'abbr', 'match'][i % 4], roundId: `round-${i}`, earnedAt: i }); state = result.collection;
     assert.ok(result.isNew); assert.ok(!cardIds.has(result.receipt.id)); cardIds.add(result.receipt.id);
     assert.equal(result.receipt.edition, Math.floor(i / 12));
     if (i < 12) assert.equal(new Set(state.receipts.map(r => r.gunId)).size, i + 1);
